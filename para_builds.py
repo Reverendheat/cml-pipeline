@@ -2,8 +2,10 @@ from dotenv import load_dotenv
 import json
 import requests
 import os
+import sys
 import time
 from netmiko import ConnectHandler
+from config import config_ios_payload, config_ec_payload
 import urllib3
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 load_dotenv()
@@ -42,6 +44,18 @@ nodes = [
         "label": "HQ_RTR",
         "node_definition": "iosv"
     },
+    {
+        "x": 50,
+        "y": 0,
+        "label": "HQ_SWITCH",
+        "node_definition": "iosvl2"
+    },
+    {
+        "x": 50,
+        "y": 0,
+        "label": "HQ_SERVER",
+        "node_definition": "alpine"
+    },
 ]
 
 # Iterate over the nodes, and create
@@ -57,34 +71,30 @@ for node in nodes:
         url=f"{base_url}/labs/{lab_id}/nodes/{node['id']}/interfaces", headers=headers, verify=False).json()
     node['interfaces'] = node_interface_response
     # Link the two devices together
-    if "interfaces" in nodes[0] and "interfaces" in nodes[1]:
+    if "interfaces" in nodes[0] and "interfaces" in nodes[1] and "interfaces" in nodes[2] and "interfaces" in nodes[3]:
+        # Connect ISP and HQRTR
         link_payload = {
             "src_int": nodes[0]['interfaces'][0],
             "dst_int": nodes[1]['interfaces'][1]
         }
         link_response = requests.post(
             url=f"{base_url}/labs/{lab_id}/links", data=json.dumps(link_payload), headers=headers, verify=False).json()
-
-# Configure the External Connector for Bridge Mode, for some reason NAT mode isn't working
-config_ec_payload = "bridge0"
+        # Connect HQRTR and HQSWITCH
+        link_payload = {
+            "src_int": nodes[1]['interfaces'][2],
+            "dst_int": nodes[2]['interfaces'][1]
+        }
+        link_response = requests.post(
+            url=f"{base_url}/labs/{lab_id}/links", data=json.dumps(link_payload), headers=headers, verify=False).json()
+        # Connect HQSWITCH and HQSERVER
+        link_payload = {
+            "src_int": nodes[2]['interfaces'][2],
+            "dst_int": nodes[3]['interfaces'][0]
+        }
+        link_response = requests.post(
+            url=f"{base_url}/labs/{lab_id}/links", data=json.dumps(link_payload), headers=headers, verify=False).json()
 
 # Put a config on the IOS Router
-# TODO: Pull this from external file
-config_ios_payload = f"""
-hostname HQ-RTR
-interface gig0/0
-ip add dhcp
-desc to ISP
-no shut
-ip route 0.0.0.0 0.0.0.0 gig0/0
-ip domain name parakoopa.local
-crypto key generate rsa modulus 2048
-ip ssh version 2
-line vty 0 15
-login local
-transport input ssh
-username {os.getenv('IOS_USERNAME')} privilege 15 password 0 {os.getenv('IOS_PASSWORD')}
-"""
 config_ios_put_response = requests.put(
     url=f"{base_url}/labs/{lab_id}/nodes/{nodes[1]['id']}/config", data=config_ios_payload, headers=headers, verify=False).json()
 config_ec_put_response = requests.put(
@@ -99,8 +109,12 @@ start_response = requests.put(
 # Get the L3 address assigned from DHCP
 # TODO: Need to make it so this can fail gracefully
 ios_ipv4 = ''
+timeout = 0
 while ios_ipv4 == '':
-    print('checking for ipv4 address..')
+    if timeout > 600:
+        sys.exit("Timeout exceeded for getting DHCP address")
+    print(f'checking for ipv4 address...{timeout} seconds elapsed...')
+    timeout += 10
     time.sleep(10)
     l3_response = requests.get(
         url=f"{base_url}/labs/{lab_id}/nodes/{nodes[1]['id']}/layer3_addresses", headers=headers, verify=False).json()
@@ -111,8 +125,8 @@ while ios_ipv4 == '':
                     ios_ipv4 = v2[0]
                     print(f"Assigned : {ios_ipv4}")
 
-# Test internet connectivity
-print("Waiting 15 seconds, then ping tests to 8.8.8.8")
+# Test internet connectivity from HQRTR
+print("Waiting 15 seconds, then ping tests to 8.8.8.8 from HQRTR")
 time.sleep(15)
 iosv = {
     'device_type': 'cisco_ios',
@@ -125,7 +139,22 @@ ping_output = net_connect.send_command('ping 8.8.8.8')
 if "(0/5)" in ping_output:
     print("Ping test: Failed")
 else:
-    print("Ping test: Success")
+    print("Ping test from router to ISP: Success")
+
+# Test internet connectivity from HQSERVER
+print("Waiting 15 seconds, then ping tests to 8.8.8.8 from HQSERVER")
+time.sleep(15)
+alpine = {
+    'device_type': 'linux',
+    'host': ios_ipv4,
+    "username": os.getenv('ALPINE_USERNAME'),
+    "password": os.getenv('ALPINE_PASSWORD'),
+    "port": 8022
+}
+net_connect = ConnectHandler(**alpine)
+ping_output = net_connect.send_command('ping 8.8.8.8')
+print(ping_output)
+
 
 # Finally stop, wipe, and delete the lab.
 lab_stop_response = requests.put(
