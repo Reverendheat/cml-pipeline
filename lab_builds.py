@@ -56,7 +56,7 @@ def main():
             "x": 50,
             "y": 0,
             "label": "HQ_SERVER",
-            "node_definition": "alpine"
+            "node_definition": "ubuntu"
         },
     ]
 
@@ -112,7 +112,7 @@ def main():
     ios_ipv4 = ''
     timeout = 0
     while ios_ipv4 == '':
-        if timeout > 600:
+        if timeout > 350:
             sys.exit("Timeout exceeded for getting DHCP address")
         print(f'checking for ipv4 address...{timeout} seconds elapsed...')
         timeout += 10
@@ -129,32 +129,42 @@ def main():
     # Test internet connectivity from HQRTR
     print("Waiting 15 seconds, then ping tests to 8.8.8.8 from HQRTR")
     time.sleep(15)
-    iosv = {
+    try:
+        iosv = {
         'device_type': 'cisco_ios',
         'host': ios_ipv4,
         "username": os.getenv('IOS_USERNAME'),
         "password": os.getenv('IOS_PASSWORD')
-    }
-    net_connect = ConnectHandler(**iosv)
-    ping_output = net_connect.send_command('ping 8.8.8.8')
-    if "(0/5)" in ping_output:
-        print("Ping test: Failed")
-    else:
-        print("Ping test from router to ISP: Success")
+        }
+        net_connect = ConnectHandler(**iosv)
+        ping_output = net_connect.send_command('ping 8.8.8.8')
+        if "(0/5)" in ping_output:
+            print("Ping test: Failed")
+        else:
+            print("Ping test from HQRTR to ISP: Success")
+    except:
+        sys.exit("Error getting DHCP for HQRTR")
 
     # Test internet connectivity from HQSERVER
     print("Waiting 15 seconds, then ping tests to 8.8.8.8 from HQSERVER")
     time.sleep(15)
-    alpine = {
+    ubuntu = {
         'device_type': 'linux',
         'host': ios_ipv4,
-        "username": os.getenv('ALPINE_USERNAME'),
-        "password": os.getenv('ALPINE_PASSWORD'),
+        "username": os.getenv('UBUNTU_USERNAME'),
+        "password": os.getenv('UBUNTU_PASSWORD'),
         "port": 8022
     }
-    net_connect = ConnectHandler(**alpine)
-    ping_output = net_connect.send_command('ping 8.8.8.8')
-    print(ping_output)
+    try:
+        net_connect = ConnectHandler(**ubuntu)
+        ping_output = net_connect.send_command('ping -c 4 8.8.8.8')
+        if "0 received" in ping_output:
+            print("Ping test: Failed")
+        else:
+            print("Ping test from HQSERVER to ISP: Success")
+    except:
+        print(f"Unable to connect to HQSERVER")
+
 
     # Finally stop, wipe, and delete the lab.
     lab_stop_response = requests.put(
