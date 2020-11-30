@@ -22,7 +22,7 @@ IOS_USERNAME=cisco
 IOS_PASSWORD=cisco
 ```
 
-## para_builds.py
+## lab_builds.py
 
 Using requests/CML REST API, builds a 2 node lab with external connectivity (bridge mode), then tests internet access by pinging from iosv node to the internet.
 
