@@ -44,7 +44,7 @@ def main():
             "x": 50,
             "y": 0,
             "label": "HQ_RTR",
-            "node_definition": "iosv"
+            "node_definition": "csr1000v"
         },
         {
             "x": 50,
@@ -127,14 +127,14 @@ def main():
                         print(f"Assigned : {ios_ipv4}")
 
     # Test internet connectivity from HQRTR
-    print("Waiting 15 seconds, then ping tests to 8.8.8.8 from HQRTR")
-    time.sleep(15)
+    print("Waiting 60 seconds, then ping tests to 8.8.8.8 from HQRTR")
+    time.sleep(60)
     try:
         iosv = {
-        'device_type': 'cisco_ios',
-        'host': ios_ipv4,
-        "username": os.getenv('IOS_USERNAME'),
-        "password": os.getenv('IOS_PASSWORD')
+            'device_type': 'cisco_ios',
+            'host': ios_ipv4,
+            "username": os.getenv('IOS_USERNAME'),
+            "password": os.getenv('IOS_PASSWORD')
         }
         net_connect = ConnectHandler(**iosv)
         ping_output = net_connect.send_command('ping 8.8.8.8')
@@ -146,8 +146,8 @@ def main():
         sys.exit("Error getting DHCP for HQRTR")
 
     # Test internet connectivity from HQSERVER
-    print("Waiting 15 seconds, then ping tests to 8.8.8.8 from HQSERVER")
-    time.sleep(15)
+    print("Waiting 60 seconds, then ping tests to 8.8.8.8 from HQSERVER")
+    time.sleep(60)
     ubuntu = {
         'device_type': 'linux',
         'host': ios_ipv4,
@@ -163,20 +163,19 @@ def main():
         else:
             print("Ping test from HQSERVER to ISP: Success")
     except:
-        print(f"Unable to connect to HQSERVER")
-
+        print(f"Unable to connect to ISP HQSERVER")
 
     # Finally stop, wipe, and delete the lab.
-    lab_stop_response = requests.put(
-        url=f"{base_url}/labs/{lab_id}/stop", headers=headers, verify=False).json()
-    lab_wipe_response = requests.put(
-        url=f"{base_url}/labs/{lab_id}/wipe", headers=headers, verify=False).json()
-    lab_delete_response = requests.delete(
-        url=f"{base_url}/labs/{lab_id}", headers=headers, verify=False).json()
+    # lab_stop_response = requests.put(
+    #     url=f"{base_url}/labs/{lab_id}/stop", headers=headers, verify=False).json()
+    # lab_wipe_response = requests.put(
+    #     url=f"{base_url}/labs/{lab_id}/wipe", headers=headers, verify=False).json()
+    # lab_delete_response = requests.delete(
+    #     url=f"{base_url}/labs/{lab_id}", headers=headers, verify=False).json()
 
-    print(f"Stopped: {lab_stop_response}")
-    print(f"Wiped: {lab_wipe_response}")
-    print(f"Deleted: {lab_delete_response}")
+    # print(f"Stopped: {lab_stop_response}")
+    # print(f"Wiped: {lab_wipe_response}")
+    # print(f"Deleted: {lab_delete_response}")
 
 
 if __name__ == "__main__":
